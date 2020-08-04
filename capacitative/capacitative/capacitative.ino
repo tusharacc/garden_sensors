@@ -1,3 +1,5 @@
+#include <Sensitive.h>
+
 
 /*
  Basic ESP8266 MQTT example
@@ -19,20 +21,33 @@
   - Select your ESP8266 in "Tools -> Board"
 */
 
+/*Tushar Saurabh
+ * 
+ * Soil Moisture: Capacitative
+ * Soil Temperature:
+ */
+
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <SimpleDHT.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 
-// Update these with values suitable for your network.
+#define ONE_WIRE_BUS 4
 
-const char* ssid = "Fios-5wX7R";
-const char* password = "comer496mmm26wed";
-const char* mqtt_server = "192.168.1.155";
 
+// Setup a oneWire instance to communicate with any OneWire device
+OneWire oneWire(ONE_WIRE_BUS);
+
+// Pass oneWire reference to DallasTemperature library
+DallasTemperature sensors(&oneWire);
 
 String SENSOR = String("SENSOR_1");
-bool tempSensor = true;
+
+//Sensors attached
+bool tempSensor = false;
+bool capacitative = false; //capacitative soil temperature
+bool dsbSensor = true; //ds18b20
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -42,12 +57,6 @@ char msg[MSG_BUFFER_SIZE];
 
 int soilPin = A0;
 
-// for DHT11, 
-//      VCC: 5V or 3V
-//      GND: GND
-//      DATA: 2
-int pinDHT11 = 2;
-SimpleDHT11 dht11(pinDHT11);
 
 void setup_wifi() {
 
@@ -136,28 +145,46 @@ void loop() {
   String soilpayload = String(",attr:soil,unit:%,value:");
   String tempPayload = String(",attr:temp,unit:C,value:");
   String humidPayload = String(",attr:hmd,unit:%,value:");
+  String soilTempPayload = String(",attr:sotm,unit:C,value:");
+  
   unsigned long now = millis();
   
   if (now - lastMsg > 5000) {
     String temp = String();
     lastMsg = now;
 
-    int val = analogRead(soilPin);
-    Serial.print("Analog Reader read: ");
-    Serial.print(val);
-    float fraction = (float) val / 1023.0;
-    Serial.print("Fraction Value Calculated: ");
-    Serial.print(fraction);
-    Serial.print("\n");
-    float percent = (float) fraction * 100.0;
-    Serial.print("Percent Value Calculated: ");
-    Serial.print(percent);
-    Serial.print("\n");
-    int soilMoisture = (100 - (int) percent);
-    Serial.print("Soil Moisture Value = ");
-    Serial.print(soilMoisture);
-    Serial.print("\n");
-    
+    /*Air: 850
+     * Water: 440
+     */
+    if (capacitative){
+      int val = analogRead(soilPin);
+      Serial.print("Analog Reader read: ");
+      Serial.print(val);
+      Serial.print(" ");
+      int absVal = abs(850 - val);
+      float percent = (absVal/410.0)*100.0;
+      Serial.print(percent);
+      Serial.print("\n");
+    }
+
+    if (dsbSensor){
+      sensors.requestTemperatures(); 
+
+      //print the temperature in Celsius
+      Serial.print("Temperature: ");
+      Serial.print(sensors.getTempCByIndex(0));
+      Serial.print((char)176);//shows degrees character
+      Serial.print("C  |  ");
+      
+      //print the temperature in Fahrenheit
+      Serial.print((sensors.getTempCByIndex(0) * 9.0) / 5.0 + 32.0);
+      Serial.print((char)176);//shows degrees character
+      Serial.println("F");
+    }
+
+    delay(3000);
+
+    /*
     char c[10];
     sprintf(c,"%d",soilMoisture);
 
@@ -169,15 +196,7 @@ void loop() {
 
     delay(3000);
 
-    if (tempSensor){
-      byte temperature = 0;
-      byte humidity = 0;
-      
-      int err = SimpleDHTErrSuccess;
-      if ((err = dht11.read(&temperature, &humidity, NULL)) != SimpleDHTErrSuccess) {
-        Serial.print("Read DHT11 failed, err="); Serial.println(err);delay(1000);
-        return;
-      }
+    
       
       char t[10];
       sprintf(t,"%d",(int)temperature);
@@ -197,11 +216,11 @@ void loop() {
       client.publish("sensor",charBuf );
   
       delay(3000);
-    }
+    }*/
     
-    Serial.println("I'm awake, but I'm going into deep sleep mode for 60 seconds\n");
+    /*Serial.println("I'm awake, but I'm going into deep sleep mode for 60 seconds\n");
     //ESP.deepSleep(1800e6); 
-    ESP.deepSleep(60e6); 
+    ESP.deepSleep(60e6); */
     
   }
 }
